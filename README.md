@@ -1,144 +1,74 @@
-# ESP32 Relay Chamber Controller for 3D Printing
+# ESP32 MOSFET Chamber Controller for 3D Printing
 
-Remote WiFi-controlled chamber heater, fan, and LED controller using ESP32 with 4-channel relay module and DS18B20 temperature sensor.
+Remote WiFi-controlled chamber heater, fan, and LED controller using ESP32 with 4-channel MOSFET module and DS18B20 temperature sensor.
 
 ## Hardware Requirements
 
 ### Main Components
-- **ESP32 Relay Board** (AC 90-250V with built-in relays)
-  - Example: ESP32-WROOM-32E 4-Way Relay Module
-  - Built-in AC/DC power supply
-  - 4x Relay outputs (NO/NC/COM)
+- **ESP32 Development Board** (ESP32-WROOM-32 or similar)
+- **4-Channel MOSFET Module** (DC 5-60V)
+  - Example: Yaregelun 4-Channel MOS Switch Module
+  - Must support PWM control
+  - Recommended: IRF520 or similar N-channel MOSFETs
 - **DS18B20 Temperature Sensor** (waterproof recommended)
+- **24V Power Supply** (adequate amperage for your loads)
 - **4.7kΩ Resistor** (for DS18B20 pull-up)
-- **24V DC Power Supply** (for loads) OR use AC power through relays
 
-### Controlled Devices
-Option A: **24V DC Devices** (switched by relays)
-- Chamber heater (24V silicone heater)
+### Controlled Devices (24V DC)
+- Chamber heater (silicone heater pad or similar)
 - Exhaust fan (24V DC fan)
 - LED strip (24V DC LEDs)
-- Spare relay available
-
-Option B: **AC-Powered Devices** (110/220V through relays)
-- Chamber heater (AC heater)
-- Exhaust fan (AC fan)
-- LED lights (AC bulbs/strips)
+- Spare channel available
 
 ### Tools & Accessories
-- Wire (14-18 AWG for AC, appropriate gauge for DC)
-- Screwdriver (for terminal blocks)
-- Multimeter (for testing)
+- Wire (appropriate gauge for current draw)
+- Soldering iron and solder
 - Heat shrink tubing
-- Cable ties
+- Multimeter (for testing)
+- Breadboard (for prototyping, optional)
 
-## Relay Module Overview
+## Wiring Diagram
 
-### Typical Pin Layout
+### Power Distribution
 ```
-ESP32 Relay Board Layout:
-┌─────────────────────────┐
-│  AC Input: L, N, GND    │  ← AC 90-250V input
-│  ┌───┐ ┌───┐ ┌───┐ ┌───┐│
-│  │ 1 │ │ 2 │ │ 3 │ │ 4 ││  ← 4x Relays
-│  └───┘ └───┘ └───┘ └───┘│
-│  NO NC COM (x4)         │  ← Relay terminals
-│  [ESP32-WROOM-32E]      │
-│  [USB-C] [Programming]  │
-└─────────────────────────┘
-```
-
-### Relay Terminal Configuration
-Each relay has 3 terminals:
-- **NO (Normally Open):** Closed when relay activated
-- **NC (Normally Closed):** Open when relay activated  
-- **COM (Common):** Connect to power source
-
-**For this application, use NO terminals** (power flows when relay is ON)
-
-## Wiring Diagrams
-
-### Option A: 24V DC Devices (Recommended)
-```
-AC Outlet → ESP32 Board (powers ESP32)
-
 24V Power Supply
-├── (+) → All device (+) terminals
-│         ├─ Heater (+)
-│         ├─ Fan (+)
-│         └─ LED (+)
+├── (+) → MOSFET Module VIN
+├── (+) → Heater (+), Fan (+), LED (+)
 └── (-) → Common Ground
 
-Relay Connections:
-COM 1 → 24V (+)    NO 1 → Heater (-)
-COM 2 → 24V (+)    NO 2 → Fan (-)
-COM 3 → 24V (+)    NO 3 → LED (-)
-COM 4 → (spare)    NO 4 → (spare)
+ESP32 3.3V
+├── (+) → DS18B20 VCC (Red wire)
+└── (+) → 4.7kΩ resistor → DS18B20 Data (Yellow wire)
 ```
 
-### Option B: AC Devices (Use with Caution)
+### Pin Connections
+
+#### ESP32 to MOSFET Module
 ```
-⚠️ DANGER: HIGH VOLTAGE - Lethal if mishandled!
-
-AC Outlet (L, N, GND)
-├── L (Hot) → 
-│   ├─ Relay 1 COM → NO 1 → Heater L
-│   ├─ Relay 2 COM → NO 2 → Fan L
-│   └─ Relay 3 COM → NO 3 → LED L
-└── N (Neutral) → 
-    ├─ Heater N
-    ├─ Fan N
-    └─ LED N
-
-⚠️ ALL AC WIRING MUST BE IN GROUNDED METAL ENCLOSURE
-⚠️ USE PROPER WIRE GAUGE (14 AWG minimum for 15A)
-⚠️ FOLLOW LOCAL ELECTRICAL CODES
+ESP32          MOSFET Module
+GPIO 25    →   Channel 1 (Heater)
+GPIO 26    →   Channel 2 (Fan)
+GPIO 27    →   Channel 3 (LEDs)
+GPIO 14    →   Channel 4 (Spare)
+GND        →   GND
 ```
 
-### DS18B20 Temperature Sensor
+#### DS18B20 Temperature Sensor
 ```
 DS18B20        ESP32
 Red (VCC)  →   3.3V
 Black (GND)→   GND
-Yellow (Data)→ GPIO 4
-               └── 4.7kΩ resistor → 3.3V (pullup)
+Yellow (Data)→ GPIO 4 (with 4.7kΩ pullup to 3.3V)
 ```
 
-## Relay Pin Configuration
-
-**IMPORTANT:** Verify your board's GPIO assignments!
-
-### Common Configuration A (Most boards)
-```cpp
-#define RELAY_1 16  // Heater
-#define RELAY_2 17  // Fan
-#define RELAY_3 18  // LEDs
-#define RELAY_4 19  // Spare
+#### Load Connections
+```
+MOSFET Ch1 OUT → Heater (-)    | Heater (+) → 24V+
+MOSFET Ch2 OUT → Fan (-)       | Fan (+) → 24V+
+MOSFET Ch3 OUT → LED (-)       | LED (+) → 24V+
 ```
 
-### Alternative Configuration B
-```cpp
-#define RELAY_1 13
-#define RELAY_2 12
-#define RELAY_3 14
-#define RELAY_4 27
-```
-
-**Check your board's documentation or silkscreen labels!**
-
-## Relay Logic
-
-Most Chinese relay boards are **ACTIVE LOW:**
-- `digitalWrite(pin, LOW)` = Relay ON (contacts closed)
-- `digitalWrite(pin, HIGH)` = Relay OFF (contacts open)
-
-If your board is **ACTIVE HIGH**, change in code:
-```cpp
-#define RELAY_ON HIGH
-#define RELAY_OFF LOW
-```
-
-**Test first:** Upload code, observe relay behavior, adjust if needed.
+**IMPORTANT:** All grounds must be connected together (ESP32 GND, MOSFET GND, 24V PSU GND)
 
 ## Software Installation
 
@@ -167,32 +97,28 @@ Install via Arduino IDE Library Manager:
 3. **Install Libraries**
 ```
    Sketch → Include Library → Manage Libraries
-   Search and install each required library
+   Search and install each required library listed above
 ```
 
 4. **Configure Code**
-   Edit these lines:
+   Edit these lines in the sketch:
 ```cpp
    const char* ssid = "YOUR_WIFI_SSID";
    const char* password = "YOUR_WIFI_PASSWORD";
    const char* mqtt_server = "192.168.1.100";  // Optional
 ```
 
-5. **Verify Relay Pin Configuration**
-   Check your board and update pin definitions if needed
-
-6. **Upload Code**
+5. **Upload Code**
 ```
    Tools → Board → ESP32 Dev Module
    Tools → Port → Select your COM port
    Sketch → Upload
 ```
 
-7. **Test Relays**
+6. **Find ESP32 IP Address**
    - Open Serial Monitor (115200 baud)
-   - Observe relay clicking sounds
-   - Verify correct ON/OFF behavior
-   - Adjust RELAY_ON/RELAY_OFF if needed
+   - Look for "IP Address: 192.168.1.XXX"
+   - Save this IP for later use
 
 ## Configuration
 
@@ -204,50 +130,32 @@ const char* password = "YourPassword";
 
 ### MQTT Setup (Optional)
 ```cpp
-const char* mqtt_server = "192.168.1.100";
+const char* mqtt_server = "192.168.1.100";  // Your MQTT broker IP
 const int mqtt_port = 1883;
-const char* mqtt_user = "username";
-const char* mqtt_pass = "password";
+const char* mqtt_user = "username";         // Optional
+const char* mqtt_pass = "password";         // Optional
 ```
 
-### Temperature Control Modes
-
-The system supports two control modes:
-
-#### 1. Bang-Bang Control (Default)
-Simple ON/OFF control with hysteresis:
-- Heater turns ON when temp < target - 2°C
-- Heater turns OFF when temp > target + 2°C
-- **Pros:** Simple, reliable, works with any heater
-- **Cons:** ±2°C temperature swing, more relay cycling
+### PID Tuning
+Default values work for most heaters, but you can tune:
 ```cpp
-String controlMode = "bang-bang";
-#define TEMP_HYSTERESIS 2.0  // Adjust swing range
+float Kp = 50.0;   // Proportional gain
+float Ki = 0.5;    // Integral gain
+float Kd = 25.0;   // Derivative gain
 ```
 
-#### 2. Time-Proportional Control
-PID-based power modulation using relay cycling:
-- Calculates power needed (0-100%)
-- Cycles relay over 10-second periods
-- Example: 50% power = 5 sec ON, 5 sec OFF
-- **Pros:** Smoother temperature, less overshoot
-- **Cons:** More relay wear, more complex
-```cpp
-String controlMode = "time-proportional";
-#define CYCLE_TIME 10000  // 10 second cycles
+**Tuning Guide:**
+- **Kp too high:** Oscillation, overshoot
+- **Kp too low:** Slow response, never reaches target
+- **Ki too high:** Overshoot, instability
+- **Kd too high:** Noisy, erratic behavior
 
-// PID tuning
-float Kp = 10.0;
-float Ki = 0.1;
-float Kd = 5.0;
-```
-
-Change mode via web interface or API.
+Adjust via web interface or G-code: `M301 P50 I0.5 D25`
 
 ### Safety Limits
 ```cpp
 #define MAX_CHAMBER_TEMP 80.0     // Maximum safe temperature (°C)
-#define HEATER_TIMEOUT 300000     // 5 minutes (ms)
+#define HEATER_TIMEOUT 300000     // 5 minutes timeout (ms)
 ```
 
 ## Usage
@@ -257,13 +165,11 @@ Change mode via web interface or API.
 Access at: `http://192.168.1.XXX/`
 
 Features:
-- **Real-time temperature display**
-- **Chamber temperature control** with target setting
-- **Fan ON/OFF toggle** with visual indicator
-- **LED ON/OFF toggle** with visual indicator
-- **Control mode selector** (Bang-Bang vs Time-Proportional)
+- **Real-time temperature display** (updates every 2 seconds)
+- **Chamber temperature control** (slider and manual input)
+- **Fan speed control** (0-100% with PWM)
+- **LED brightness control** (0-100% with PWM)
 - **Emergency stop button**
-- **Live relay status indicators**
 - **Mobile-responsive design**
 
 ### HTTP API
@@ -278,11 +184,9 @@ Response:
   "temperature": 45.2,
   "target": 50.0,
   "heating": true,
-  "heater_state": true,
-  "fan": true,
-  "led": false,
-  "emergency": false,
-  "mode": "bang-bang"
+  "fan": 128,
+  "led": 255,
+  "emergency": false
 }
 ```
 
@@ -293,25 +197,18 @@ curl -X POST http://192.168.1.XXX/api/chamber \
   -d '{"temperature": 50}'
 ```
 
-#### Toggle Fan
+#### Set Fan Speed (0-255)
 ```bash
 curl -X POST http://192.168.1.XXX/api/fan \
   -H "Content-Type: application/json" \
-  -d '{"state": true}'
+  -d '{"speed": 128}'
 ```
 
-#### Toggle LED
+#### Set LED Brightness (0-255)
 ```bash
 curl -X POST http://192.168.1.XXX/api/led \
   -H "Content-Type: application/json" \
-  -d '{"state": true}'
-```
-
-#### Change Control Mode
-```bash
-curl -X POST http://192.168.1.XXX/api/mode \
-  -H "Content-Type: application/json" \
-  -d '{"mode": "time-proportional"}'
+  -d '{"brightness": 191}'
 ```
 
 #### Emergency Stop
@@ -330,149 +227,127 @@ curl -X POST http://192.168.1.XXX/gcode -d "M141 S50"
 ```gcode
 M141 S[temp]    # Set chamber temperature (°C)
 M141 S0         # Turn off chamber heater
-M106            # Turn on fan
+M106 S[speed]   # Set fan speed (0-255)
 M107            # Turn off fan
-M150 S[value]   # Turn on LED (any value >0)
-M150 S0         # Turn off LED
+M150 S[bright]  # Set LED brightness (0-255)
+M105            # Get temperature report
 M112            # Emergency stop
+M301 P[p] I[i] D[d]  # Set PID values
 ```
-
-**Note:** Fan and LED are binary (ON/OFF) with relays - speed/brightness values ignored
 
 ### MQTT Topics
 
 #### Subscribe (Control)
 ```
-printer/chamber/set    # Set chamber temp (payload: number)
-printer/fan/set        # Set fan state (payload: "1"/"0" or "on"/"off")
-printer/led/set        # Set LED state (payload: "1"/"0" or "on"/"off")
+printer/chamber/set    # Set chamber temp (payload: temperature value)
+printer/fan/set        # Set fan speed (payload: 0-255)
+printer/led/set        # Set LED brightness (payload: 0-255)
 ```
 
 #### Publish (Status)
 ```
 printer/chamber/temperature  # Current temperature
 printer/chamber/target       # Target temperature
-printer/chamber/heating      # Heating enabled (true/false)
-printer/heater/state        # Heater relay state (ON/OFF)
-printer/fan/state           # Fan relay state (ON/OFF)
-printer/led/state           # LED relay state (ON/OFF)
-printer/chamber/emergency   # Emergency events
+printer/chamber/heating      # Heating state (true/false)
+printer/fan/speed           # Fan speed (0-255)
+printer/led/brightness      # LED brightness (0-255)
+printer/chamber/emergency   # Emergency stop event
 ```
 
 #### MQTT Examples
 ```bash
-# Set chamber to 50°C
+# Set chamber temperature
 mosquitto_pub -h 192.168.1.100 -t "printer/chamber/set" -m "50"
 
-# Turn on fan
-mosquitto_pub -h 192.168.1.100 -t "printer/fan/set" -m "1"
-
-# Subscribe to status
+# Subscribe to all status updates
 mosquitto_sub -h 192.168.1.100 -t "printer/#"
 ```
 
 ## OrcaSlicer Integration
 
-### Python Post-Processing Script
+### Method 1: Post-Processing Script
 
-**chamber_control_relay.py:**
+**chamber_control.py:**
 ```python
 #!/usr/bin/env python3
 import sys
 import requests
 
-ESP32_IP = "192.168.1.XXX"  # Change this!
+ESP32_IP = "192.168.1.XXX"
 
-def send_command(endpoint, data):
+def send_command(gcode):
     try:
-        requests.post(
-            f"http://{ESP32_IP}{endpoint}",
-            json=data,
-            timeout=2
-        )
-        return True
-    except Exception as e:
-        print(f"Warning: {e}")
-        return False
+        requests.post(f"http://{ESP32_IP}/gcode", data=gcode, timeout=2)
+    except:
+        pass
 
 def process_gcode(filename):
     with open(filename, 'r') as f:
         lines = f.readlines()
     
     # Detect filament type
+    filament_type = "PLA"
     chamber_temp = 0
+    
     for line in lines[:100]:
         if "ABS" in line.upper() or "ASA" in line.upper():
             chamber_temp = 50
         elif "PETG" in line.upper():
             chamber_temp = 35
-        elif "NYLON" in line.upper():
-            chamber_temp = 55
     
     # Send preheat commands
-    print("Sending chamber preheat commands...")
-    
     if chamber_temp > 0:
-        send_command("/api/chamber", {"temperature": chamber_temp})
-        print(f"  Chamber: {chamber_temp}°C")
+        send_command(f"M141 S{chamber_temp}")
+    send_command("M150 S255")  # LEDs on
+    send_command("M106 S77")   # Fan 30%
     
-    send_command("/api/led", {"state": True})
-    print("  LEDs: ON")
-    
-    send_command("/api/fan", {"state": False})
-    print("  Fan: OFF (will turn on at end)")
-    
-    print(f"Chamber controller configured for {chamber_temp}°C")
+    print(f"Chamber preheated to {chamber_temp}°C")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: chamber_control_relay.py <gcode_file>")
-        sys.exit(1)
-    
     process_gcode(sys.argv[1])
 ```
 
 **OrcaSlicer Setup:**
-1. Save script to `/path/to/chamber_control_relay.py`
-2. Make executable: `chmod +x chamber_control_relay.py`
+1. Save script to `/path/to/chamber_control.py`
+2. Make executable: `chmod +x chamber_control.py`
 3. OrcaSlicer → Edit → Preferences → Post-processing scripts
-4. Add: `/path/to/chamber_control_relay.py`
+4. Add: `/path/to/chamber_control.py`
 
-### Manual Control Scripts
+### Method 2: Manual Control
 
-**preheat_abs.sh (Linux/Mac):**
+Create desktop shortcuts or scripts:
+
+**Linux/Mac:**
 ```bash
 #!/bin/bash
-ESP32_IP="192.168.1.XXX"
-
-echo "Preheating chamber for ABS..."
-curl -X POST http://$ESP32_IP/api/chamber -H "Content-Type: application/json" -d '{"temperature": 50}'
-curl -X POST http://$ESP32_IP/api/led -H "Content-Type: application/json" -d '{"state": true}'
-echo "Chamber heating to 50°C, LEDs ON"
+# preheat_abs.sh
+curl -X POST http://192.168.1.XXX/gcode -d "M141 S50"
+curl -X POST http://192.168.1.XXX/gcode -d "M150 S255"
+curl -X POST http://192.168.1.XXX/gcode -d "M106 S128"
+echo "Chamber preheating for ABS..."
 ```
 
-**preheat_abs.bat (Windows):**
+**Windows:**
 ```batch
 @echo off
-set ESP32_IP=192.168.1.XXX
-
-echo Preheating chamber for ABS...
-curl -X POST http://%ESP32_IP%/api/chamber -H "Content-Type: application/json" -d "{\"temperature\": 50}"
-curl -X POST http://%ESP32_IP%/api/led -H "Content-Type: application/json" -d "{\"state\": true}"
-echo Chamber heating to 50°C, LEDs ON
+REM preheat_abs.bat
+curl -X POST http://192.168.1.XXX/gcode -d "M141 S50"
+curl -X POST http://192.168.1.XXX/gcode -d "M150 S255"
+curl -X POST http://192.168.1.XXX/gcode -d "M106 S128"
+echo Chamber preheating for ABS...
 pause
 ```
 
 ### Recommended Chamber Temperatures
 
-| Filament | Chamber Temp | Fan | Notes |
-|----------|-------------|-----|-------|
-| PLA | 0°C (off) | ON | Active cooling helpful |
-| PETG | 30-35°C | OFF | Mild heat improves adhesion |
-| ABS/ASA | 50-60°C | OFF | Critical for warp prevention |
-| Nylon/PA | 55-70°C | OFF | High heat reduces moisture |
-| PC | 60-70°C | OFF | Highest temps needed |
-| TPU | 0-30°C | ON | Flexible, less heat needed |
+| Filament | Chamber Temp | Notes |
+|----------|-------------|-------|
+| PLA | 0°C (off) | No chamber heating |
+| PETG | 30-35°C | Improves layer adhesion |
+| ABS/ASA | 50-60°C | Critical for warp prevention |
+| Nylon/PA | 55-70°C | Reduces moisture issues |
+| PC | 60-70°C | High temp needed |
+| TPU | 0-30°C | Depends on hardness |
 
 ## Home Assistant Integration
 
@@ -485,220 +360,147 @@ mqtt:
       unit_of_measurement: "°C"
       device_class: temperature
     
-    - name: "Chamber Target"
+    - name: "Chamber Target Temperature"
       state_topic: "printer/chamber/target"
       unit_of_measurement: "°C"
   
-  climate:
-    - name: "3D Printer Chamber"
-      mode_command_topic: "printer/chamber/mode"
-      temperature_command_topic: "printer/chamber/set"
-      temperature_state_topic: "printer/chamber/temperature"
-      current_temperature_topic: "printer/chamber/temperature"
-      min_temp: 0
-      max_temp: 80
-      temp_step: 1
-      modes:
-        - "off"
-        - "heat"
+  number:
+    - name: "Chamber Temperature Setpoint"
+      command_topic: "printer/chamber/set"
+      state_topic: "printer/chamber/target"
+      min: 0
+      max: 80
+      step: 1
+      unit_of_measurement: "°C"
+      mode: slider
   
-  switch:
+  fan:
     - name: "Chamber Fan"
       command_topic: "printer/fan/set"
-      state_topic: "printer/fan/state"
-      payload_on: "1"
+      state_topic: "printer/fan/speed"
       payload_off: "0"
-    
+      payload_on: "255"
+      speed_range_min: 0
+      speed_range_max: 255
+  
+  light:
     - name: "Chamber Lights"
       command_topic: "printer/led/set"
-      state_topic: "printer/led/state"
-      payload_on: "1"
-      payload_off: "0"
+      state_topic: "printer/led/brightness"
+      brightness_scale: 255
 ```
 
 ## Troubleshooting
 
-### Relay Issues
-
-**Problem:** Relay clicks but device doesn't turn on
-- **Check wiring:** Verify COM, NO, NC connections
-- **Test continuity:** Use multimeter in ohm mode
-- **Voltage test:** Measure voltage at NO terminal when relay is ON
-- **Load problem:** Test relay with different device (light bulb)
-
-**Problem:** Relay doesn't click at all
-- **Pin configuration:** Verify GPIO pins match your board
-- **Active LOW/HIGH:** Try reversing RELAY_ON/RELAY_OFF
-- **Board fault:** Test relay manually (short signal pin to GND)
-
-**Problem:** All relays turn on together
-- **Code error:** Check pin definitions don't overlap
-- **Power issue:** Insufficient power to ESP32
-- **Board defect:** May need replacement
-
-**Problem:** Relay constantly cycles on/off rapidly
-- **Temperature oscillation:** Use bang-bang mode, increase hysteresis
-- **Sensor noise:** Move sensor away from electrical noise
-- **Code loop:** Check for infinite loop conditions
-
 ### Temperature Sensor Issues
 
 **Problem:** "DS18B20 sensor not found"
-- **Check wiring:** VCC→3.3V, GND→GND, Data→GPIO4
-- **Pullup resistor:** Must have 4.7kΩ between Data and VCC
-- **Wrong sensor:** Ensure DS18B20, not DHT22
-- **Sensor fault:** Try different sensor
+- **Check wiring:** VCC to 3.3V, GND to GND, Data to GPIO4
+- **Verify pull-up resistor:** 4.7kΩ between Data and VCC
+- **Test sensor:** Try different GPIO pin
+- **Multiple sensors:** Each needs unique address
 
-**Problem:** Temperature reading -127°C
-- **Bad connection:** Check all solder joints
-- **Long wires:** Use shielded cable for >3m runs
-- **Power issue:** Sensor not getting 3.3V
+**Problem:** Temperature reading -127°C or DEVICE_DISCONNECTED
+- **Bad connection:** Resolder connections
+- **Wrong sensor:** Ensure DS18B20, not DHT22 or similar
+- **Long wires:** Use shielded cable for runs >3 meters
 
-**Problem:** Temperature inaccurate
-- **Calibration:** Test in ice water (0°C) and boiling water (100°C)
-- **Sensor placement:** Must be inside chamber, not on wall
-- **Air flow:** Ensure sensor reads chamber air, not just heater
+### WiFi Connection Issues
 
-### Heating Control Issues
+**Problem:** "WiFi connection failed"
+- **Check credentials:** Verify SSID and password
+- **Signal strength:** Move ESP32 closer to router
+- **2.4GHz only:** ESP32 doesn't support 5GHz WiFi
+- **Static IP:** Consider setting static IP in router
 
-**Problem:** Temperature overshoots target by >5°C
-- **Switch to bang-bang:** More predictable for slow heaters
-- **Increase hysteresis:** Change from 2°C to 3-4°C
-- **Reduce heater power:** Use lower wattage heater
-- **PID tuning:** Reduce Kp value
+**Problem:** IP address keeps changing
+- **Set static DHCP:** Reserve IP in router settings
+- **Or use mDNS:** Access via `http://chamber.local/` (requires mDNS support)
 
-**Problem:** Temperature never reaches target
-- **Insufficient heater:** Need higher wattage
+### Heating Issues
+
+**Problem:** Heater not turning on
+- **Check voltage:** Verify 24V at MOSFET output with multimeter
+- **MOSFET failure:** Test MOSFET with different load
+- **Current limit:** Ensure heater doesn't exceed MOSFET rating
+- **Common ground:** All grounds must be connected
+
+**Problem:** Temperature oscillates wildly
+- **PID tuning:** Reduce Kp value (try 30 instead of 50)
+- **Sensor placement:** Move sensor closer to heater
+- **Thermal mass:** Small heaters oscillate more
+
+**Problem:** Heater timeout error
+- **Increase timeout:** Change `HEATER_TIMEOUT` to 600000 (10 min)
+- **Insufficient power:** Check heater wattage vs power supply
 - **Poor insulation:** Seal chamber better
-- **Timeout too short:** Increase HEATER_TIMEOUT
-- **Sensor placement:** Sensor too far from heater
 
-**Problem:** Temperature swings ±5-10°C
-- **Normal for bang-bang:** Expected with hysteresis
-- **Switch to time-proportional:** Smoother control
-- **Increase cycle time:** Change from 10s to 20s
-- **Better insulation:** Reduces heat loss
+### Web Interface Issues
 
-### WiFi/Network Issues
-
-**Problem:** Cannot find ESP32 IP address
-- **Serial monitor:** Check for IP at startup (115200 baud)
-- **Router admin:** Look for new device in DHCP list
-- **Static IP:** Set static DHCP reservation in router
-- **mDNS:** Try `http://chamber.local/` (may not work on all networks)
-
-**Problem:** Web interface doesn't load
-- **Firewall:** Disable temporarily to test
-- **Same network:** Ensure PC and ESP32 on same subnet
+**Problem:** Cannot access web interface
 - **Ping test:** `ping 192.168.1.XXX`
-- **Port 80:** Some routers block HTTP
+- **Firewall:** Check Windows/Mac firewall settings
+- **Different subnet:** Ensure PC and ESP32 on same network
+- **Port 80 blocked:** Some routers block port 80
 
-### Safety & Emergency Issues
+**Problem:** Web page loads but controls don't work
+- **JavaScript errors:** Check browser console (F12)
+- **JSON parsing:** Update ArduinoJson library to latest
+- **API timeout:** Increase timeout in code
 
-**Problem:** Emergency stop not working
-- **Test button:** Click emergency button on web interface
-- **MQTT test:** Send emergency command via MQTT
-- **Code issue:** Verify emergencyStop() function
-- **Relay stuck:** May need manual intervention
+### MOSFET Module Issues
 
-**Problem:** Heater won't turn off
-- **Relay fault:** Relay contacts welded shut (replace board)
-- **Code stuck:** Upload code again
-- **AC wiring:** IMMEDIATELY disconnect power if using AC
-- **Emergency:** Unplug entire system
+**Problem:** MOSFET stays on all the time
+- **Stuck gate:** Replace MOSFET
+- **Wrong wiring:** Verify ESP32 GPIO to MOSFET signal pins
+- **Logic level:** Some MOSFETs need 12V gate drive (use logic-level MOSFETs)
+
+**Problem:** MOSFET gets very hot
+- **Undersized MOSFET:** Use higher current rating
+- **No heatsink:** Add heatsink to MOSFET
+- **PWM frequency:** Try lower frequency (reduce `PWM_FREQ`)
 
 ## Safety Warnings
 
-⚠️ **CRITICAL ELECTRICAL SAFETY**
+⚠️ **ELECTRICAL SAFETY**
+- Never work on live circuits
+- Use proper wire gauge for current ratings
+- Install fuses/circuit breakers
+- Keep electronics away from heat sources
 
-### AC Wiring (90-250V)
-- **LETHAL VOLTAGE** - Can kill instantly
-- **Only qualified electricians** should work with AC
-- **All AC wiring** must be in grounded metal enclosure
-- **Use proper wire gauge** (14 AWG minimum for 15A)
-- **Follow local electrical codes** - Required by law
-- **Install GFCI protection** - Prevents electrocution
-- **Never work on live circuits** - Always disconnect power
-- **Double-check all connections** - One mistake can be fatal
+⚠️ **FIRE SAFETY**
+- Do not exceed MAX_CHAMBER_TEMP (80°C default)
+- Always use thermal runaway protection
+- Never leave heater unattended
+- Install smoke detector near printer
+- Keep fire extinguisher accessible
 
-### DC Wiring (24V)
-- **Low voltage but high current** - Can cause fires
-- **Use proper wire gauge** for current draw
-- **Install inline fuses** - Critical for fire prevention
-- **Avoid short circuits** - Can melt wires
+⚠️ **THERMAL SAFETY**
+- Heaters and enclosure surfaces get HOT
+- Allow cooldown before handling
+- Use high-temp rated wire (>105°C)
+- Ensure proper ventilation
 
-### Fire Prevention
-- ⚠️ **Never leave heater unattended**
-- ⚠️ **Do NOT exceed 80°C** without proper materials
-- ⚠️ **Install smoke detector** near printer
-- ⚠️ **Keep fire extinguisher** accessible (ABC type)
-- ⚠️ **Test emergency stop** regularly
-- ⚠️ **Ensure proper ventilation** - Prevent heat buildup
-- ⚠️ **Use thermal fuse** on heater as backup
-
-### Thermal Safety
-- Heaters get **extremely hot** (>100°C surface temp)
-- Allow **full cooldown** before handling (30+ minutes)
-- Use **high-temp wire** (silicone insulation, >200°C rated)
-- **Mount securely** - Prevent heater contact with plastic
-- **Monitor first runs** - Stay nearby for first 5-10 heating cycles
-
-### Relay Specifications
-- **DO NOT EXCEED relay ratings** (typically 10A @ 250VAC)
-- **Inductive loads** (motors, fans) need derating (use 50% of rating)
-- **Resistive loads** (heaters) can use full rating
-- **Check datasheet** for your specific relay board
-
-### Testing Procedure
-1. **Visual inspection** - Check all connections before power
-2. **Low voltage test** - Test with 12V/24V first if possible
-3. **Monitor temperature** - Use external thermometer first few runs
-4. **Verify emergency stop** - Test before leaving unattended
-5. **Check for hot spots** - Use IR thermometer on connections
-6. **Smell check** - Any burning smell = immediate shutdown
-
-## Relay Lifespan & Maintenance
-
-### Expected Relay Life
-- **Mechanical cycles:** 100,000+ (manufacturer rating)
-- **Electrical cycles:** 10,000-100,000 (depends on load)
-- **Time-proportional mode:** ~10-20 cycles/min = wears faster
-- **Bang-bang mode:** ~2-6 cycles/min = longer life
-
-### Maintenance Schedule
-- **Weekly:** Listen for relay click sounds (should be crisp)
-- **Monthly:** Check relay operation with multimeter
-- **Every 6 months:** Inspect terminals for burning/arcing
-- **Yearly:** Consider replacing high-cycle relays
-
-### Signs of Relay Failure
-- **Intermittent operation** - Contacts bouncing
-- **Won't turn on** - Contacts oxidized
-- **Won't turn off** - Contacts welded (DANGER!)
-- **Buzzing sound** - Coil issue
-- **Burning smell** - Overheated, replace immediately
-
-### Extending Relay Life
-- Use **bang-bang mode** for less critical control
-- Add **RC snubber** for inductive loads
-- Don't exceed **50% of relay rating**
-- Keep relay board **cool and dust-free**
+⚠️ **TESTING**
+- Test without printer first
+- Monitor first few heating cycles
+- Verify emergency stop works
+- Check temperature sensor accuracy
 
 ## Specifications
 
-### Electrical Ratings (Typical)
-- **Input Power:** AC 90-250V (built-in power supply)
-- **Relay Rating:** 10A @ 250VAC, 10A @ 30VDC
-- **Contact Type:** SPDT (Single Pole, Double Throw)
-- **Control Voltage:** 3.3V (ESP32 GPIO)
+### Electrical Ratings
+- **Input Voltage:** 5V (ESP32), 24V (loads)
+- **MOSFET Module:** 5-60V DC, 5A per channel (typical)
+- **PWM Frequency:** 25kHz (adjustable)
+- **PWM Resolution:** 8-bit (0-255)
 
 ### Temperature Control
 - **Sensor:** DS18B20 (-55°C to +125°C)
 - **Resolution:** 0.0625°C (12-bit)
 - **Update Rate:** 1 second
-- **Control Modes:** Bang-Bang, Time-Proportional
+- **Control Method:** PID
 - **Safety Limit:** 80°C (configurable)
-- **Hysteresis:** 2°C (adjustable)
 
 ### Network
 - **WiFi:** 2.4GHz 802.11 b/g/n
@@ -706,55 +508,19 @@ mqtt:
 - **MQTT:** Port 1883 (configurable)
 - **Update Rate:** 2 seconds (status)
 
-### Control Performance
+## Current Consumption
 
-**Bang-Bang Mode:**
-- Temperature stability: ±2-4°C
-- Overshoot: <5°C
-- Time to temp: 10-30 min (depends on heater)
-- Relay cycles: 2-6 per minute
-
-**Time-Proportional Mode:**
-- Temperature stability: ±1-2°C
-- Overshoot: <2°C
-- Time to temp: 10-30 min
-- Relay cycles: 10-20 per minute (more wear)
-
-## Power Consumption
-
-### AC Power (if using AC loads)
-- ESP32 board: ~2W (built-in power supply)
-- Chamber heater: 100-200W (typical)
-- Fan: 5-20W
-- LED: 10-30W
-- **Total:** ~120-250W
-
-### DC Power (if using 24V DC loads)
-- 24V heater (100W): ~4.2A
+Approximate current draw @ 24V:
+- Silicone heater (100W): ~4.2A
 - 24V fan (5W): ~0.2A
-- 24V LED (12W): ~0.5A
-- **Total 24V:** ~5A (requires 24V 6A+ PSU)
-- **ESP32:** Powered separately from AC
+- LED strip (12W): ~0.5A
+- **Total:** ~5A (requires 24V 6A+ power supply)
 
-## Comparison: Relay vs MOSFET
-
-| Feature | Relay Version | MOSFET Version |
-|---------|--------------|----------------|
-| **Control** | ON/OFF only | PWM (0-100%) |
-| **Switching Speed** | Slow (~10ms) | Fast (<1ms) |
-| **Noise** | Audible clicking | Silent |
-| **Lifespan** | Limited cycles | Unlimited |
-| **Isolation** | Galvanically isolated | Not isolated |
-| **AC Capability** | Yes (10A typical) | No (DC only) |
-| **Complexity** | Simpler wiring | More complex |
-| **Cost** | Higher | Lower |
-| **Best For** | AC loads, simple control | DC loads, precise control |
+**ESP32 draws ~200mA @ 5V** (can be powered from USB during development)
 
 ## License
 
 This project is released under MIT License. Use at your own risk.
-
-**DISCLAIMER:** Working with electricity, especially AC power, is dangerous and potentially lethal. This project is provided for educational purposes. The author assumes no liability for damage, injury, or death resulting from use of this information. Always follow local electrical codes and consult a licensed electrician for AC installations.
 
 ## Credits
 
@@ -766,16 +532,11 @@ This project is released under MIT License. Use at your own risk.
 ## Support
 
 For issues or questions:
-1. Check troubleshooting section
-2. Verify all wiring (use multimeter)
-3. Test relays individually
-4. Check Serial Monitor (115200 baud)
-5. Ensure correct RELAY_ON/RELAY_OFF polarity
+1. Check troubleshooting section above
+2. Verify all wiring connections
+3. Test components individually
+4. Check Serial Monitor output (115200 baud)
 
 ## Version History
 
-- **v1.0** - Initial release with dual control modes, web interface, MQTT support
-
----
-
-⚠️ **FINAL WARNING:** This device controls heating elements capable of causing fires and severe burns. Never leave unattended. Always use proper safety measures including smoke detectors, fire extinguishers, and thermal protection. When working with AC power, hire a licensed electrician unless you are qualified to work with potentially lethal voltages.
+- **v1.0** - Initial release with PID control, web interface, MQTT support
