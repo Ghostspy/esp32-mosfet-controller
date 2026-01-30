@@ -1,0 +1,17 @@
+# configuration.yaml
+mqtt:
+  sensor:
+    - name: "Chamber Temperature"
+      state_topic: "printer/chamber/temperature"
+      unit_of_measurement: "°C"
+    
+    - name: "Chamber Target"
+      state_topic: "printer/chamber/target"
+      unit_of_measurement: "°C"
+
+  switch:
+    - name: "Chamber Heater"
+      state_topic: "printer/chamber/heating"
+      command_topic: "printer/chamber/set"
+      payload_on: "50"
+      payload_off: "0"

@@ -1,0 +1,7 @@
+# Publish to MQTT topics
+mosquitto_pub -h 192.168.1.100 -t "printer/chamber/set" -m "50"
+mosquitto_pub -h 192.168.1.100 -t "printer/fan/set" -m "255"
+mosquitto_pub -h 192.168.1.100 -t "printer/led/set" -m "128"
+
+# Subscribe to status
+mosquitto_sub -h 192.168.1.100 -t "printer/chamber/#"

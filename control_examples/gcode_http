@@ -1,0 +1,4 @@
+# Send G-code commands
+curl -X POST http://192.168.1.XXX/gcode -d "M141 S50"
+curl -X POST http://192.168.1.XXX/gcode -d "M106 S255"
+curl -X POST http://192.168.1.XXX/gcode -d "M150 S128"

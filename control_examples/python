@@ -1,0 +1,12 @@
+import requests
+
+ESP32_IP = "192.168.1.XXX"
+
+# Set chamber temperature
+requests.post(f"http://{ESP32_IP}/api/chamber", 
+              json={"temperature": 50})
+
+# Get current status
+status = requests.get(f"http://{ESP32_IP}/api/status").json()
+print(f"Chamber: {status['temperature']}°C / {status['target']}°C")
+print(f"Fan: {status['fan']}, LED: {status['led']}")

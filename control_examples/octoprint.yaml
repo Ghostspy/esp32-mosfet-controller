@@ -1,0 +1,10 @@
+controls:
+  - name: Chamber
+    children:
+      - name: Set 50°C
+        command: http://192.168.1.XXX/gcode
+        type: parametric_command
+        parameter: M141 S50
+      - name: Fan 100%
+        command: http://192.168.1.XXX/gcode
+        parameter: M106 S255
