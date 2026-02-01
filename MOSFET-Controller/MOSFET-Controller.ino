@@ -32,14 +32,14 @@
 // ============== CONFIGURATION ==============
 
 // WiFi Configuration
-const char* ssid = "gh-iot";
-const char* password = "littleorangemen";
+const char* ssid = "wifi_ssid";
+const char* password = "wifi_password";
 
 // MQTT Configuration (optional - comment out if not using)
-const char* mqtt_server = "192.168.1.179";
+const char* mqtt_server = "192.168.1.100";
 const int mqtt_port = 1883;
-const char* mqtt_user = "ghost";
-const char* mqtt_pass = "L0g!tech";
+const char* mqtt_user = "mqtt_user";
+const char* mqtt_pass = "mqtt_password";
 const char* mqtt_client_id = "esp32_chamber";
 
 // Pin Definitions - MOSFET Module (ESP32-S3 safe GPIOs)
