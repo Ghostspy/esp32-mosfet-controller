@@ -1,9 +1,9 @@
 /*
- * ESP32 MOSFET Chamber Controller for 3D Printing
+ * ESP32-S3 MOSFET Chamber Controller for 3D Printing
  * 
  * Hardware:
- * - ESP32 Development Board
- * - 4-Channel MOSFET Module (DC 5-60V)
+ * - ESP32-S3 N16R8 DevKitC-1 Development Board
+ * - 4-Channel MOSFET Module (DC 5-36V)
  * - DS18B20 Temperature Sensor
  * - 24V Chamber Heater
  * - 24V Internal Purifier Fan (HEPA/Carbon filter)
@@ -18,7 +18,7 @@
  * - Filter runtime tracking
  * - Emergency stop with safety features
  * 
- * Version: 2.0
+ * Version: 2.1 - ESP32-S3 Compatible
  * Author: Chamber Controller Project
  */
 
@@ -32,33 +32,33 @@
 // ============== CONFIGURATION ==============
 
 // WiFi Configuration
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "gh-iot";
+const char* password = "littleorangemen";
 
 // MQTT Configuration (optional - comment out if not using)
-const char* mqtt_server = "192.168.1.100";
+const char* mqtt_server = "192.168.1.179";
 const int mqtt_port = 1883;
-const char* mqtt_user = "mqtt_user";
-const char* mqtt_pass = "mqtt_pass";
+const char* mqtt_user = "ghost";
+const char* mqtt_pass = "L0g!tech";
 const char* mqtt_client_id = "esp32_chamber";
 
-// Pin Definitions - MOSFET Module
-#define CHAMBER_HEATER_PIN 25  // Channel 1 - 24V Chamber Heater
-#define PURIFIER_FAN_PIN 26    // Channel 2 - 24V Internal Purifier Fan
-#define LED_PIN 27             // Channel 3 - 24V LED Strip
-#define SPARE_PIN 14           // Channel 4 - Available for future use
+// Pin Definitions - MOSFET Module (ESP32-S3 safe GPIOs)
+#define CHAMBER_HEATER_PIN 5  // Channel 1 - 24V Chamber Heater
+#define PURIFIER_FAN_PIN 6    // Channel 2 - 24V Internal Purifier Fan
+#define LED_PIN 7             // Channel 3 - 24V LED Strip
+#define SPARE_PIN 8           // Channel 4 - Available for future use
 
 // DS18B20 Temperature Sensor
-#define ONE_WIRE_BUS 4         // Data pin (needs 4.7kΩ pullup to 3.3V)
+#define ONE_WIRE_BUS 4        // Data pin (needs 4.7kΩ pullup to 3.3V)
 
 // PWM Configuration
-#define PWM_FREQ 25000         // 25kHz for silent operation
-#define PWM_RESOLUTION 8       // 8-bit (0-255)
+#define PWM_FREQ 1000       // 20kHz for silent operation (within module's 0-20kHz range)
+#define PWM_RESOLUTION 8      // 8-bit (0-255)
 
 // Safety Limits
-#define MAX_CHAMBER_TEMP 80.0  // Maximum safe temperature (°C)
+#define MAX_CHAMBER_TEMP 60.0  // Maximum safe temperature (°C)
 #define MIN_TEMP_READING -20.0 // Sensor fault detection
-#define HEATER_TIMEOUT 300000  // 5 minutes to reach temperature
+#define HEATER_TIMEOUT 600000  // 5 minutes to reach temperature
 
 // PID Constants (tune for your heater)
 float Kp = 50.0;  // Proportional gain
@@ -66,7 +66,6 @@ float Ki = 0.5;   // Integral gain
 float Kd = 25.0;  // Derivative gain
 
 // ============== HARDWARE SETUP ==============
-
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 DeviceAddress chamberThermometer;
@@ -76,7 +75,6 @@ WiFiClient espClient;
 PubSubClient mqtt(espClient);
 
 // ============== STATE VARIABLES ==============
-
 // Temperature Control
 float chamberTargetTemp = 0;
 float chamberCurrentTemp = 0;
@@ -110,8 +108,8 @@ unsigned long lastFilterUpdate = 0;
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\n=== ESP32 MOSFET Chamber Controller ===");
-  Serial.println("Version 2.0 - Bentobox Fan Edition");
+  Serial.println("\n\n=== ESP32-S3 MOSFET Chamber Controller ===");
+  Serial.println("Version 2.1 - Bentobox Fan Edition (ESP32-S3)");
   
   setupPWM();
   setupTemperatureSensor();
@@ -126,31 +124,35 @@ void setup() {
 }
 
 void setupPWM() {
-  // Setup PWM channels
-  ledcSetup(0, PWM_FREQ, PWM_RESOLUTION); // Heater
-  ledcSetup(1, PWM_FREQ, PWM_RESOLUTION); // Purifier Fan
-  ledcSetup(2, PWM_FREQ, PWM_RESOLUTION); // LEDs
-  ledcSetup(3, PWM_FREQ, PWM_RESOLUTION); // Spare
+  // ESP32-S3 Arduino Core 3.x API - attach pins directly
+  // ledcAttach(pin, frequency, resolution) - returns true on success
   
-  // Attach pins to PWM channels
-  ledcAttachPin(CHAMBER_HEATER_PIN, 0);
-  ledcAttachPin(PURIFIER_FAN_PIN, 1);
-  ledcAttachPin(LED_PIN, 2);
-  ledcAttachPin(SPARE_PIN, 3);
+  if (!ledcAttach(CHAMBER_HEATER_PIN, PWM_FREQ, PWM_RESOLUTION)) {
+    Serial.println("ERROR: Failed to attach PWM to CHAMBER_HEATER_PIN");
+  }
+  if (!ledcAttach(PURIFIER_FAN_PIN, PWM_FREQ, PWM_RESOLUTION)) {
+    Serial.println("ERROR: Failed to attach PWM to PURIFIER_FAN_PIN");
+  }
+  if (!ledcAttach(LED_PIN, PWM_FREQ, PWM_RESOLUTION)) {
+    Serial.println("ERROR: Failed to attach PWM to LED_PIN");
+  }
+  if (!ledcAttach(SPARE_PIN, PWM_FREQ, PWM_RESOLUTION)) {
+    Serial.println("ERROR: Failed to attach PWM to SPARE_PIN");
+  }
   
-  // Initialize all outputs to OFF
-  ledcWrite(0, 0);
-  ledcWrite(1, 0);
-  ledcWrite(2, 0);
-  ledcWrite(3, 0);
+  // Initialize all outputs to OFF (use pin numbers, not channel numbers!)
+  ledcWrite(CHAMBER_HEATER_PIN, 0);
+  ledcWrite(PURIFIER_FAN_PIN, 0);
+  ledcWrite(LED_PIN, 0);
+  ledcWrite(SPARE_PIN, 0);
   
-  Serial.println("PWM channels initialized");
+  Serial.println("PWM channels initialized on GPIO 5, 6, 7, 8");
 }
 
 void setupTemperatureSensor() {
   sensors.begin();
   if (!sensors.getAddress(chamberThermometer, 0)) {
-    Serial.println("ERROR: DS18B20 sensor not found!");
+    Serial.println("WARNING: DS18B20 sensor not found!");
     Serial.println("Check wiring: VCC->3.3V, GND->GND, Data->GPIO4 (with 4.7kΩ pullup)");
   } else {
     sensors.setResolution(chamberThermometer, 12);
@@ -245,7 +247,7 @@ void setChamberTemp(float temp) {
     lastError = 0;
     lastPIDTime = millis();
   } else {
-    ledcWrite(0, 0); // Turn off heater
+    ledcWrite(CHAMBER_HEATER_PIN, 0);  // Turn off heater
   }
   
   Serial.printf("Chamber target set to %.1f°C\n", chamberTargetTemp);
@@ -280,7 +282,7 @@ void updateChamberHeater() {
   
   // If heater disabled or in emergency state, turn off
   if (!chamberHeaterEnabled || heatingTimeout || emergencyStopActive) {
-    ledcWrite(0, 0);
+    ledcWrite(CHAMBER_HEATER_PIN, 0);
     return;
   }
   
@@ -310,7 +312,7 @@ void updateChamberHeater() {
   output = constrain(output, 0, 255);
   
   // Apply to heater
-  ledcWrite(0, (int)output);
+  ledcWrite(CHAMBER_HEATER_PIN, (int)output);
 }
 
 // ============== PURIFIER FAN CONTROL ==============
@@ -350,7 +352,7 @@ void updatePurifierFan() {
 void setPurifier(int speed) {
   if (!emergencyStopActive) {
     purifierSpeed = constrain(speed, 0, 255);
-    ledcWrite(1, purifierSpeed);
+    ledcWrite(PURIFIER_FAN_PIN, purifierSpeed);
   }
 }
 
@@ -380,7 +382,7 @@ void updateFilterRuntime() {
 
 void setLED(int brightness) {
   ledBrightness = constrain(brightness, 0, 255);
-  ledcWrite(2, ledBrightness);
+  ledcWrite(LED_PIN, ledBrightness);
   Serial.printf("LED brightness: %d (%.1f%%)\n", ledBrightness, (ledBrightness/255.0)*100);
 }
 
@@ -391,8 +393,8 @@ void emergencyStop() {
   chamberHeaterEnabled = false;
   chamberTargetTemp = 0;
   
-  ledcWrite(0, 0);    // Heater OFF
-  setPurifier(255);   // Purifier FULL for cooling
+  ledcWrite(CHAMBER_HEATER_PIN, 0);  // Heater OFF
+  setPurifier(255);                   // Purifier FULL for cooling
   
   integral = 0;
   lastError = 0;
@@ -668,7 +670,7 @@ void handleRoot() {
   <div class="container">
     <div class="header">
       <h1>Enclosure Controller</h1>
-      <div class="subtitle">ESP32 MOSFET • Bentobox Fan Edition</div>
+      <div class="subtitle">ESP32-S3 MOSFET • Bentobox Fan Edition</div>
     </div>
     
     <div class="card">
@@ -680,7 +682,7 @@ void handleRoot() {
         Heater: <span id="heaterStatus">--</span>
       </div>
       <div class="input-group">
-        <input type="number" id="tempInput" value="50" min="0" max="80" step="1">
+        <input type="number" id="tempInput" value="50" min="0" max="60" step="1">
         <button onclick="setChamber()">Set Temperature</button>
         <button onclick="setChamber(0)">Turn Off</button>
       </div>
